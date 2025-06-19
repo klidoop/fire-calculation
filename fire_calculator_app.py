@@ -46,53 +46,52 @@ def simulate_fire(expenses, savings, yearly_savings, label, pt_income=0):
     year = 0
 
     while total < fire_number and year < 100:
-        projection.append({"Year": year, "Savings": total, "Scenario": label})
+        projection.append({"Age": current_age + year, "Savings": total, "Scenario": label})
         total = total * (1 + return_rate) + yearly_savings
         year += 1
 
-    projection.append({"Year": year, "Savings": total, "Scenario": label})
+    projection.append({"Age": current_age + year, "Savings": total, "Scenario": label})
     accumulated_years = year
 
     for i in range(1, retirement_duration + 1):
         annual_draw = max(0, adjusted_expenses * ((1 + inflation_rate) ** i) - pt_income)
         total = total * (1 + retirement_return) - annual_draw
-        projection.append({"Year": accumulated_years + i, "Savings": total, "Scenario": label})
+        projection.append({"Age": current_age + accumulated_years + i, "Savings": total, "Scenario": label})
 
     return pd.DataFrame(projection), fire_number, accumulated_years
 
 # --- Run Simulations ---
 df_list = []
+summary_metrics = []
 
 # No Kid
 df1, fire1, years1 = simulate_fire(annual_expenses, current_savings, annual_savings, "No Kid")
 df_list.append(df1)
+summary_metrics.append(("No Kid", fire1, current_age + years1))
 
 # With Kid
 if have_kid:
     df2, fire2, years2 = simulate_fire(kid_expense, current_savings, kid_savings, "With Kid")
     df_list.append(df2)
+    summary_metrics.append(("With Kid", fire2, current_age + years2))
 
 # Part-Time Work
 if part_time:
     df3, fire3, years3 = simulate_fire(annual_expenses, current_savings, annual_savings, "Part-Time Work", pt_income=pt_income)
     df_list.append(df3)
+    summary_metrics.append(("Part-Time Work", fire3, current_age + years3))
 
 # --- Display Results ---
 df = pd.concat(df_list, ignore_index=True)
 
-scenarios = df["Scenario"].unique()
-cols = st.columns(len(scenarios))
-for i, scenario in enumerate(scenarios):
-    sub = df[df["Scenario"] == scenario]
-    fire = sub[sub["Year"] == sub["Year"].min()]["Savings"].iloc[-1] * (1 + withdrawal_rate)
-    years = sub["Year"].max() - retirement_duration
-    retirement_age = current_age + years
+cols = st.columns(len(summary_metrics))
+for i, (scenario, fire_val, retire_age) in enumerate(summary_metrics):
     with cols[i]:
-        st.metric(f"FIRE Number ({scenario})", f"${fire:,.0f}")
-        st.metric(f"You can retire at age ({scenario})", f"{retirement_age}")
+        st.metric(f"FIRE Number ({scenario})", f"${fire_val:,.0f}")
+        st.metric(f"You can retire at age ({scenario})", f"{retire_age}")
 
 # --- Chart ---
-st.line_chart(df.pivot(index="Year", columns="Scenario", values="Savings"), use_container_width=True)
+st.line_chart(df.pivot(index="Age", columns="Scenario", values="Savings"), use_container_width=True)
 
 # --- Table ---
 with st.expander("📅 Year-by-Year Details"):

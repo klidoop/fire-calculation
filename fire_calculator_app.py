@@ -1,7 +1,6 @@
 #@title Full FIRE Calculator App with Retirement, Inflation, Scenarios, and Export
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 from io import BytesIO
 import base64
 

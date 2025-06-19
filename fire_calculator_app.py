@@ -11,6 +11,8 @@ st.title("🔥 FIRE (Financial Independence, Retire Early) Calculator")
 st.header("Input Your Financial Info")
 col1, col2 = st.columns(2)
 with col1:
+    current_age = st.number_input("Your Current Age", value=30, step=1)
+    expected_lifespan = st.number_input("Expected Age at Death", value=90, step=1)
     annual_expenses = st.number_input("Annual Expenses ($) - No Kid", value=40000, step=1000)
     current_savings = st.number_input("Current Savings ($)", value=50000, step=1000)
     annual_savings = st.number_input("Annual Savings ($)", value=15000, step=1000)
@@ -19,7 +21,6 @@ with col1:
 with col2:
     withdrawal_rate = st.number_input("Withdrawal Rate (%)", value=4.0, step=0.1) / 100
     retirement_return = st.number_input("Return During Retirement (%)", value=4.0, step=0.1) / 100
-    retirement_years = st.number_input("Planned Retirement Duration (years)", value=30, step=1)
     expense_reduction = st.number_input("% Expense Reduction in FIRE (0 = none)", value=0.0, step=1.0)
     enable_download = st.checkbox("Enable CSV Export", value=True)
 
@@ -33,6 +34,8 @@ part_time = st.checkbox("Add scenario: Part-Time Work in Retirement", value=True
 if part_time:
     st.markdown("### Additional Info for Part-Time Scenario")
     pt_income = st.number_input("Annual Part-Time Income in Retirement ($)", value=10000, step=1000)
+
+retirement_duration = expected_lifespan - current_age  # calculated now
 
 # --- Scenario Function ---
 def simulate_fire(expenses, savings, yearly_savings, label, pt_income=0):
@@ -50,7 +53,7 @@ def simulate_fire(expenses, savings, yearly_savings, label, pt_income=0):
     projection.append({"Year": year, "Savings": total, "Scenario": label})
     accumulated_years = year
 
-    for i in range(1, retirement_years + 1):
+    for i in range(1, retirement_duration + 1):
         annual_draw = max(0, adjusted_expenses * ((1 + inflation_rate) ** i) - pt_income)
         total = total * (1 + retirement_return) - annual_draw
         projection.append({"Year": accumulated_years + i, "Savings": total, "Scenario": label})
@@ -82,10 +85,11 @@ cols = st.columns(len(scenarios))
 for i, scenario in enumerate(scenarios):
     sub = df[df["Scenario"] == scenario]
     fire = sub[sub["Year"] == sub["Year"].min()]["Savings"].iloc[-1] * (1 + withdrawal_rate)
-    years = sub["Year"].max() - retirement_years
+    years = sub["Year"].max() - retirement_duration
+    retirement_age = current_age + years
     with cols[i]:
         st.metric(f"FIRE Number ({scenario})", f"${fire:,.0f}")
-        st.metric(f"Years to FIRE ({scenario})", years)
+        st.metric(f"You can retire at age ({scenario})", f"{retirement_age}")
 
 # --- Chart ---
 st.line_chart(df.pivot(index="Year", columns="Scenario", values="Savings"), use_container_width=True)

@@ -27,9 +27,10 @@ with col2:
 have_kid = st.checkbox("Add scenario: Have Kid", value=True)
 if have_kid:
     st.markdown("### Additional Info for 'Have Kid' Scenario")
+    kid_start_age = st.number_input("Age When Kid Is Born", value=32, step=1)
+    kid_support_years = st.number_input("Years of Child-Related Expenses", value=23, step=1)
     kid_expense = st.number_input("Estimated Annual Expenses with Kid ($)", value=60000, step=1000)
     kid_savings = st.number_input("Annual Savings with Kid ($)", value=10000, step=1000)
-    kid_support_years = st.number_input("Years of Child-Related Expenses", value=23, step=1)
 
 part_time = st.checkbox("Add scenario: Part-Time Work in Retirement", value=True)
 if part_time:
@@ -37,9 +38,7 @@ if part_time:
     pt_income = st.number_input("Annual Part-Time Income in Retirement ($)", value=10000, step=1000)
 
 # --- Scenario Function ---
-def simulate_fire(expenses, savings, yearly_savings, label, pt_income=0, kid_support_end_age=None, base_expenses=None):
-    adjusted_expenses = expenses * (1 - expense_reduction / 100)
-    base_expenses = base_expenses or adjusted_expenses
+def simulate_fire(expenses, savings, yearly_savings, label, pt_income=0, kid_start_age=None, kid_end_age=None, kid_expense=None, base_expense=None, kid_savings=None):
     projection = []
     total = savings
     year = 0
@@ -49,19 +48,29 @@ def simulate_fire(expenses, savings, yearly_savings, label, pt_income=0, kid_sup
         if age >= expected_lifespan:
             return pd.DataFrame([], columns=["Age", "Savings", "Scenario"]), 0, 0
 
+        # Pre-retirement expense and savings logic
+        if kid_start_age and kid_start_age <= age < kid_end_age:
+            expense_now = kid_expense
+            savings_now = kid_savings
+        else:
+            expense_now = expenses
+            savings_now = yearly_savings
+
+        adjusted_expense = expense_now * (1 - expense_reduction / 100)
         projection.append({"Age": age, "Savings": total, "Scenario": label})
-        total = total * (1 + return_rate) + yearly_savings
+        total = total * (1 + return_rate) + savings_now
         year += 1
 
         retire_savings = total
         success = True
         for i in range(1, expected_lifespan - age + 1):
             check_age = age + i
-            if kid_support_end_age and check_age >= kid_support_end_age:
-                expense_now = base_expenses * ((1 + inflation_rate) ** i)
+            if kid_start_age and kid_start_age <= check_age < kid_end_age:
+                use_expense = kid_expense
             else:
-                expense_now = adjusted_expenses * ((1 + inflation_rate) ** i)
-            annual_draw = max(0, expense_now - pt_income)
+                use_expense = base_expense
+            use_expense = use_expense * (1 - expense_reduction / 100)
+            annual_draw = max(0, use_expense * ((1 + inflation_rate) ** i) - pt_income)
             retire_savings = retire_savings * (1 + retirement_return) - annual_draw
             if retire_savings < 0:
                 success = False
@@ -72,10 +81,12 @@ def simulate_fire(expenses, savings, yearly_savings, label, pt_income=0, kid_sup
 
     for i in range(1, expected_lifespan - age + 1):
         check_age = age + i
-        if kid_support_end_age and check_age >= kid_support_end_age:
-            draw = max(0, base_expenses * ((1 + inflation_rate) ** i) - pt_income)
+        if kid_start_age and kid_start_age <= check_age < kid_end_age:
+            use_expense = kid_expense
         else:
-            draw = max(0, adjusted_expenses * ((1 + inflation_rate) ** i) - pt_income)
+            use_expense = base_expense
+        use_expense = use_expense * (1 - expense_reduction / 100)
+        draw = max(0, use_expense * ((1 + inflation_rate) ** i) - pt_income)
         total = total * (1 + retirement_return) - draw
         projection.append({"Age": check_age, "Savings": total, "Scenario": label})
 
@@ -93,10 +104,19 @@ summary_metrics.append(("No Kid", fire1, age1))
 
 # With Kid
 if have_kid:
-    kid_support_end_age = current_age + kid_support_years
-    df2, fire2, age2 = simulate_fire(kid_expense, current_savings, kid_savings, "With Kid",
-                                     kid_support_end_age=kid_support_end_age,
-                                     base_expenses=annual_expenses * (1 - expense_reduction / 100))
+    kid_end_age = kid_start_age + kid_support_years
+    df2, fire2, age2 = simulate_fire(
+        annual_expenses,
+        current_savings,
+        annual_savings,
+        "With Kid",
+        pt_income=pt_income if part_time else 0,
+        kid_start_age=kid_start_age,
+        kid_end_age=kid_end_age,
+        kid_expense=kid_expense,
+        base_expense=annual_expenses,
+        kid_savings=kid_savings
+    )
     df_list.append(df2)
     summary_metrics.append(("With Kid", fire2, age2))
 
@@ -135,7 +155,8 @@ st.markdown("""
 ### About This App
 This tool helps you:
 - Estimate your FIRE number with or without a kid
-- Account for child-related expenses for a limited number of years
+- Specify when the child is born and how long expenses last
+- Model transitions from kid-related to normal expenses accurately
 - Calculate the earliest retirement age that results in $0 at your chosen death age
 - Compare side-by-side scenarios including part-time income
 """)

@@ -35,54 +35,65 @@ if part_time:
     st.markdown("### Additional Info for Part-Time Scenario")
     pt_income = st.number_input("Annual Part-Time Income in Retirement ($)", value=10000, step=1000)
 
-retirement_duration = expected_lifespan - current_age  # calculated now
-
 # --- Scenario Function ---
 def simulate_fire(expenses, savings, yearly_savings, label, pt_income=0):
     adjusted_expenses = expenses * (1 - expense_reduction / 100)
-    fire_number = adjusted_expenses / withdrawal_rate
     projection = []
     total = savings
     year = 0
 
-    while total < fire_number and (current_age + year) < expected_lifespan:
-        projection.append({"Age": current_age + year, "Savings": total, "Scenario": label})
+    while True:
+        # Simulate accumulation phase year-by-year
+        age = current_age + year
+        if age >= expected_lifespan:
+            return pd.DataFrame([], columns=["Age", "Savings", "Scenario"]), 0, 0
+
+        projection.append({"Age": age, "Savings": total, "Scenario": label})
         total = total * (1 + return_rate) + yearly_savings
         year += 1
 
-    projection.append({"Age": current_age + year, "Savings": total, "Scenario": label})
-    accumulated_years = year
+        # Check if this total would sustain retirement with 0 at death
+        retire_savings = total
+        success = True
+        for i in range(1, expected_lifespan - age + 1):
+            annual_draw = max(0, adjusted_expenses * ((1 + inflation_rate) ** i) - pt_income)
+            retire_savings = retire_savings * (1 + retirement_return) - annual_draw
+            if retire_savings < 0:
+                success = False
+                break
 
-    for i in range(1, retirement_duration + 1):
-        age = current_age + accumulated_years + i
-        if age > expected_lifespan:
+        if success:
             break
-        annual_draw = max(0, adjusted_expenses * ((1 + inflation_rate) ** i) - pt_income)
-        total = total * (1 + retirement_return) - annual_draw
-        projection.append({"Age": age, "Savings": total, "Scenario": label})
 
-    return pd.DataFrame(projection), fire_number, accumulated_years
+    # Now simulate retirement phase
+    for i in range(1, expected_lifespan - age + 1):
+        draw = max(0, adjusted_expenses * ((1 + inflation_rate) ** i) - pt_income)
+        total = total * (1 + retirement_return) - draw
+        projection.append({"Age": age + i, "Savings": total, "Scenario": label})
+
+    fire_number = projection[-(expected_lifespan - age + 1)]["Savings"]
+    return pd.DataFrame(projection), fire_number, age
 
 # --- Run Simulations ---
 df_list = []
 summary_metrics = []
 
 # No Kid
-df1, fire1, years1 = simulate_fire(annual_expenses, current_savings, annual_savings, "No Kid")
+df1, fire1, age1 = simulate_fire(annual_expenses, current_savings, annual_savings, "No Kid")
 df_list.append(df1)
-summary_metrics.append(("No Kid", fire1, current_age + years1))
+summary_metrics.append(("No Kid", fire1, age1))
 
 # With Kid
 if have_kid:
-    df2, fire2, years2 = simulate_fire(kid_expense, current_savings, kid_savings, "With Kid")
+    df2, fire2, age2 = simulate_fire(kid_expense, current_savings, kid_savings, "With Kid")
     df_list.append(df2)
-    summary_metrics.append(("With Kid", fire2, current_age + years2))
+    summary_metrics.append(("With Kid", fire2, age2))
 
 # Part-Time Work
 if part_time:
-    df3, fire3, years3 = simulate_fire(annual_expenses, current_savings, annual_savings, "Part-Time Work", pt_income=pt_income)
+    df3, fire3, age3 = simulate_fire(annual_expenses, current_savings, annual_savings, "Part-Time Work", pt_income=pt_income)
     df_list.append(df3)
-    summary_metrics.append(("Part-Time Work", fire3, current_age + years3))
+    summary_metrics.append(("Part-Time Work", fire3, age3))
 
 # --- Display Results ---
 df = pd.concat(df_list, ignore_index=True)
@@ -113,7 +124,6 @@ st.markdown("""
 ### About This App
 This tool helps you:
 - Estimate your FIRE number with or without a kid
-- Project timelines to reach FIRE
-- Model post-retirement drawdown with inflation and part-time income
-- Compare side-by-side outcomes
+- Calculate the earliest retirement age that results in $0 at your chosen death age
+- Compare side-by-side scenarios including part-time income
 """)

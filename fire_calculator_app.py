@@ -45,7 +45,7 @@ def simulate_fire(expenses, savings, yearly_savings, label, pt_income=0):
     total = savings
     year = 0
 
-    while total < fire_number and year < 100:
+    while total < fire_number and (current_age + year) < expected_lifespan:
         projection.append({"Age": current_age + year, "Savings": total, "Scenario": label})
         total = total * (1 + return_rate) + yearly_savings
         year += 1
@@ -54,9 +54,12 @@ def simulate_fire(expenses, savings, yearly_savings, label, pt_income=0):
     accumulated_years = year
 
     for i in range(1, retirement_duration + 1):
+        age = current_age + accumulated_years + i
+        if age > expected_lifespan:
+            break
         annual_draw = max(0, adjusted_expenses * ((1 + inflation_rate) ** i) - pt_income)
         total = total * (1 + retirement_return) - annual_draw
-        projection.append({"Age": current_age + accumulated_years + i, "Savings": total, "Scenario": label})
+        projection.append({"Age": age, "Savings": total, "Scenario": label})
 
     return pd.DataFrame(projection), fire_number, accumulated_years
 

@@ -39,6 +39,9 @@ if part_time:
 
 # --- Scenario Function ---
 def simulate_fire(expenses, savings, yearly_savings, label, pt_income=0, kid_start_age=None, kid_end_age=None, kid_expense=None, base_expense=None, kid_savings=None):
+    if base_expense is None:
+        base_expense = expenses
+
     projection = []
     total = savings
     year = 0
